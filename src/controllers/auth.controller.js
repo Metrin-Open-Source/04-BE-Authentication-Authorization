@@ -35,10 +35,10 @@ const login = async (req, res) => {
             return res.status(401).json({ message: 'username atau password salah' });
         }
         const accessToken = jwt.sign({ userId: user.id,username: user.username ,role: user.role }, process.env.JWT_SECRET, { expiresIn: '15m' });
-        if (!user.resfreshToken){
+      
             const refreshToken = jwt.sign({ userId: user.id,username: user.username,role: user.role }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
             await User.update({ refreshToken }, { where: { id: user.id } });
-        }
+        
       
         res.status(200).json({ 
             message: 'Login berhasil', 
@@ -53,23 +53,35 @@ const login = async (req, res) => {
 
 const refreshToken = async (req, res) => {
     try {
-        const userId = req.body.userId;
-        const user = await User.findOne({ where: { id: userId } });
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+        const { refreshToken } = req.body;
+        if (!refreshToken) {
+            return res.status(400).json({ message: 'Refresh token diperlukan' });
         }
-        const decoded = jwt.verify(user.refreshToken, process.env.JWT_REFRESH_SECRET);
-        if (decoded.userId !== user.id) {
-            return res.status(401).json({ message: 'Invalid refresh token' });
-        }
-        const accessToken = jwt.sign({ userId: user.id,username: user.username,role: user.role }, process.env.JWT_SECRET, { expiresIn: '15m' });
-        res.status(200).json({ accessToken });
 
-    }
-    catch (error) {
+        const user = await User.findOne({ where: { refreshToken } });
+        if (!user) {
+            return res.status(404).json({ message: 'Token tidak valid' });
+        }
+
+        try {
+            const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+            if (decoded.userId !== user.id) {
+                return res.status(401).json({ message: 'Token tidak valid' });
+            }
+
+            const accessToken = jwt.sign(
+                { userId: user.id, username: user.username, role: user.role },
+                process.env.JWT_SECRET,
+                { expiresIn: '15m' }
+            );
+            
+            res.status(200).json({ accessToken });
+        } catch (err) {
+            return res.status(401).json({ message: 'Token tidak valid atau kadaluarsa' });
+        }
+    } catch (error) {
         res.status(500).json({ message: error.message });
     }
-    
 }
 module.exports = {
     register,
